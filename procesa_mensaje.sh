@@ -2,26 +2,35 @@
 
 . `dirname $0`/bot.config
 source ${BASEDIR}/funciones.sh
-
+MESSAGE="message"
 MENSAJE=$1
+#cat ${MENSAJE} | jq .
 
-file_id=$(campo message.voice.file_id)
+edited=$(campo edited_message.message_id)
+if [ "${edited}" != "null" ] ; then
+  MESSAGE="edited_message"
+fi
+echo $(date -d @$(campo ${MESSAGE}.date)) $(campo update_id) $(campo ${MESSAGE}.from.first_name) $(campo ${MESSAGE}.text)
+
+file_id=$(campo ${MESSAGE}.voice.file_id)
 
 if [ ${file_id} == "null" ]; then 
   # No es un audio
+  rm -- "${MENSAJE}"
   exit 1
 fi
 
-echo Es un audio
+#echo Es un audio
 
-chat_id=$(campo message.chat.id) 
-from_id=$(campo message.from.id)
-from_user=$(campo message.from.username)
+chat_id=$(campo ${MESSAGE}.chat.id) 
+from_id=$(campo ${MESSAGE}.from.id)
+from_user=$(campo ${MESSAGE}.from.username)
 
 DATOS=$(grep ^"${chat_id}~${from_id}~${from_user}" -- "${BASEDIR}/podcasts.conf")
 
 if [ -z "${DATOS}" ] ; then 
     # No es el autor que buscamos
+    rm -- "${MENSAJE}"
     exit 1
 fi
 
@@ -31,13 +40,15 @@ imagen=$(echo "'${DATOS}'" | cut -d '~' -f 6 )
 urlbase=$(echo "'${DATOS}'" | cut -d '~' -f 7 )
 update_id=$(campo update_id)
 
-file_duration=$(campo message.voice.duration)
-file_type=$(campo message.voice.mime_type)
-file_unique_id=$(campo message.voice.file_unique_id)
-file_size=$(campo message.voice.file_size)
+file_duration=$(campo ${MESSAGE}.voice.duration)
+file_type=$(campo ${MESSAGE}.voice.mime_type)
+file_unique_id=$(campo ${MESSAGE}.voice.file_unique_id)
+file_size=$(campo ${MESSAGE}.voice.file_size)
 
-caption=$(campo message.caption)
-date=$(campo message.date)
+message_id=$(campo ${MESSAGE}.message_id)
+
+caption=$(campo ${MESSAGE}.caption)
+date=$(campo ${MESSAGE}.date)
 
 update_id=$(campo update_id)
 
@@ -54,7 +65,9 @@ update_id=$(campo update_id)
 #echo Descargo audio
 
 # Guardo en una variable el chat_id sin el menos de los grupos
-chat_id2=$(echo "${chat_id}" | tr -d '-')
+#chat_id2=$(echo "${chat_id}" | tr -d '-')
+baseLink=${chat_id:4}
+chat_id2=${chat_id:1}
 
 mp3="$(dirname ${rss})/${file_unique_id}.mp3"
 #json="$(dirname ${rss})/${file_unique_id}.json"
@@ -84,13 +97,13 @@ fi
 
 unset LANG
 
-echo Genero la cabecera del podcast
+#echo Genero la cabecera del podcast
 cat <<EOF > "$(dirname ${rss})/header"
 <?xml version="1.0" encoding="UTF-8"?>
 <rss xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" version="2.0">
   <channel>
     <title>${titulo}</title>
-    <link>https://t.me/c/${chat_id2}</link>
+    <link>https://t.me/c/${baseLink}</link>
     <description></description>
     <language>es</language>
     <pubDate>$(date --rfc-email)</pubDate>
@@ -106,29 +119,29 @@ cat <<EOF > "$(dirname ${rss})/header"
     <image>
       <title>${titulo}</title>
       <url>${imagen}</url>
-      <link>https://t.me/c/${chat_id2}</link>
+      <link>https://t.me/c/${baseLink}</link>
     </image>
 EOF
 
-echo Genero el item
-cat <<EOF > "$(dirname ${rss})/${update_id}.item"
+#echo Genero el item
+cat <<EOF > "$(dirname ${rss})/${chat_id2}_${message_id}.item"
     <item>
       <title>${caption} $(date -d @${date} +%Y/%m/%d)</title>
-      <link>https://t.me/c/${chat_id2}/${update_id}</link>
+      <link>https://t.me/c/${baseLink}/${message_id}</link>
       <description>${caption}</description>
       <enclosure url="${urlbase}/$(basename ${mp3})" length="${file_duration}" type="audio/mpeg" />
       <pubDate>$(date --rfc-email -d @${date})</pubDate>
       <itunes:duration>${file_duration}</itunes:duration>
       <itunes:explicit>no</itunes:explicit>
-      <guid>https://t.me/c/${chat_id2}/${update_id}</guid>
+      <guid>https://t.me/c/${baseLink}/${message_id}</guid>
     </item>
 EOF
 
-echo Genero el pie
+#echo Genero el pie
 cat <<EOF > "$(dirname ${rss})/footer"
   </channel>
 </rss>
 EOF
 
 echo Genero el rss concatenando archivos
-cat  "$(dirname ${rss})/header" $(ls -r "$(dirname ${rss})"/*item ) "$(dirname ${rss})/footer" > "${rss}"
+cat  "$(dirname ${rss})/header" $(ls -r "$(dirname ${rss})"/*.item ) "$(dirname ${rss})/footer" > "${rss}"

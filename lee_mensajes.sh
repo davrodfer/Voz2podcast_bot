@@ -20,10 +20,10 @@ while true; do
     curl -q -s -X POST ${TGURLUPDATES} -F offset=$((${OFFSET}+1)) -o ${UPDATES}
     NMSGS=$(cat ${UPDATES}  | jq -c '.result|.[]' | wc -l)  
 
-    echo Numero de mensajes: ${NMSGS}
+    # echo Numero de mensajes: ${NMSGS}
 
   if [ ${NMSGS} -gt 0 ] ; then
-    echo Procesando Mensajes
+    #echo Procesando Mensajes
     for mensaje in `cat ${UPDATES} | jq -cr '.result|.[]| @base64'`; do 
       update_id=`echo $mensaje | tr -d '"' | base64 --decode | jq -rc '.update_id'`
       chat_id=$(echo $mensaje | tr -d '"' | base64 --decode | jq -rc '.message.chat.id')
@@ -34,6 +34,7 @@ while true; do
       echo ${update_id} > ${OFFSETF}
     done
   fi
-  sleep 5
+  find ${TMPDIR} -type f -name "telegramBot_*" -mtime +1 -exec rm -- {} \;
+  sleep ${TIEMPOENTRECONSULTAS}
 
 done
